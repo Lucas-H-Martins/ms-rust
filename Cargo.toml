@@ -1,6 +1,10 @@
-[package]
-name = "rust_estudos"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+resolver = "2"
 
-[dependencies]
+members = ["bins/consumers","bins/grpc", "services"]
+
+default-members = ["bins/grpc", "bins/consumers"]
+
+[workspace.dependencies]
+lapin = "2.3.4"
+dotenvy = "0.15.7"
