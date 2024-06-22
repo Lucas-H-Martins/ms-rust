@@ -1,0 +1,28 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "type": "lldb",
+        "request": "launch",
+        "name": "consumer",
+        "cargo": {
+          "args": [
+            "build",
+            "--bin=consumers",
+            "--package=consumers"
+          ],
+          "filter": {
+            "name": "consumers",
+            "kind": "bin"
+          }
+        },
+        "env": {
+          "APP_NAME": "consumers"          ,
+          "RUST_ENV": "local",
+          // "RUST_BACKTRACE": "full",
+        },
+        "args": [],
+        "cwd": "${workspaceFolder}"
+      }
+    ]
+  }

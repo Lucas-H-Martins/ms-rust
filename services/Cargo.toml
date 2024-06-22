@@ -10,3 +10,5 @@ tracing-subscriber = { workspace = true }
 lapin ={ workspace = true }
 tokio ={ workspace = true }
 futures-lite ={ workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }

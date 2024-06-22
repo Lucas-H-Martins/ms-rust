@@ -497,6 +497,8 @@ checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 name = "consumers"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "lapin",
  "services",
  "tokio",
  "tracing",
@@ -1681,9 +1683,11 @@ dependencies = [
 name = "services"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "dotenvy",
  "futures-lite 2.3.0",
  "lapin",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
