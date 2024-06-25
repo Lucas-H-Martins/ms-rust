@@ -10,3 +10,4 @@ tracing-subscriber = { workspace = true }
 tokio = { workspace = true}
 lapin = { workspace = true }
 async-trait = { workspace = true }
+serde_json = { workspace = true }

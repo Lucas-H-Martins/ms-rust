@@ -74,12 +74,12 @@ impl Dispatcher for AmqpDispatcher {
     }
 
     async fn consumer_data(self) -> Result<(), AmqpError> {
-        self.consume_single_handler().await
+        self.consumer_handler().await
     }
 }
 
 impl AmqpDispatcher {
-    pub async fn consume_single_handler(self) -> Result<(), AmqpError> {
+    pub async fn consumer_handler(self) -> Result<(), AmqpError> {
         let key = self.dispatcher_def.keys().next().unwrap();
         let def = self.dispatcher_def.get(key).unwrap();
 

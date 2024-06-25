@@ -11,52 +11,51 @@ use lapin::{
 
 use tracing::{debug, error, info};
 
-use super::{dispatcher::AmqpDispatcherDefinition, errors::AmqpError};
+use super::{dispatcher::AmqpDispatcherDefinition, errors::AmqpError, AmqpMessage};
 
 pub async fn consume(
     delivery: &Delivery,
     defs: &HashMap<String, AmqpDispatcherDefinition>,
     channel: Arc<Channel>,
 ) -> Result<(), AmqpError> {
+    // get message type
     let msg_type = get_header_msg_type(&delivery.properties);
 
-    debug!("Received message type: {:?}", msg_type);
-
-    // Consuma mensagens da fila
-    let mut consumer = match channel
-        .basic_consume(
-            "my_queue",
-            "my_consumer",
-            BasicConsumeOptions::default(),
-            FieldTable::default(),
-        )
-        .await
-    {
-        Ok(consumer) => Ok(consumer),
-        Err(_) => Err(AmqpError::ConsumerError),
-    }?;
-
-    while let Some(delivery) = consumer.next().await {
-        let delivery = delivery.expect("error in consumer");
-
-        info!("Received data");
-        match std::str::from_utf8(&delivery.data) {
-            Ok(message) => {
-                //
-                info!("Received message: {}", message);
+    // verify in hashmap if have some dispatcher to process this message type
+    let Some(dispatcher) = defs.get(&msg_type) else {
+        info!("Removing message for unsuported type = {}", msg_type);
+        match delivery.ack(BasicAckOptions { multiple: false }).await {
+            Err(err) => {
+                error!("Error to ACK message , {}", err)
             }
-            Err(_) => {
-                //
-                error!("Received non-UTF8 message");
+            _ => {}
+        }
+        return Err(AmqpError::UnsupportedMessageType);
+    };
+
+    // get message
+    let message = AmqpMessage::new(msg_type, &delivery.data, None);
+
+    // call the handler configured to message type
+    match dispatcher.handler.handle(message).await {
+        Ok(_) => {
+            info!("message sucessfull handled and processed");
+            // if sucess ack message
+            match delivery.ack(BasicAckOptions { multiple: false }).await {
+                Err(e) => {
+                    error!("Error to Ack message");
+                    return Err(AmqpError::AckError);
+                }
+                _ => return Ok(()),
             }
         }
-
-        match delivery.ack(BasicAckOptions::default()).await {
-            Ok(_) => Ok(()),
-            Err(_) => Err(AmqpError::ConsumerError),
-        }?
-    }
-    Ok(())
+        Err(_) => {
+            error!("Error to process the message");
+            // if some error in process message, delivery the error message to a new queue, for debug latter
+            // todo to recorrery error.
+            return Err(AmqpError::InternalError);
+        }
+    };
 }
 
 fn get_header_msg_type(received: &AMQPProperties) -> String {

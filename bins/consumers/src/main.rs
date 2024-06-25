@@ -1,5 +1,5 @@
 mod consumer;
-use std::error::Error;
+use std::{error::Error, fmt::Display};
 
 use consumer::ConsumerMessage;
 use lapin::{options::ExchangeDeclareOptions, protocol::channel, types::FieldTable, ExchangeKind};
@@ -11,6 +11,7 @@ use services::{
         QueueDefinition,
     },
     envs::environment_setup,
+    messages::ProcessDataTimer,
 };
 use tracing::{error, info};
 
@@ -23,7 +24,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let dispatcher = amqp_setup().await?;
 
-    match tokio::join!(dispatcher.consume_single_handler()) {
+    match tokio::join!(dispatcher.consumer_data()) {
         (Ok(_),) => todo!(),
         (Err(_),) => todo!(),
         _ => Ok(()),
@@ -37,10 +38,11 @@ async fn amqp_setup() -> Result<AmqpDispatcher, Box<dyn Error>> {
 
     let handler = ConsumerMessage::new();
 
-    let dispacher_def = &DispatcherDefinition::new("queue_test", &format!("{}", "teste"));
+    let dispatcher_def =
+        &DispatcherDefinition::new("queue_test", &format!("{}", "ProcessDataTimer"));
 
     let dispatcher = AmqpDispatcher::new(channel.clone(), vec![queue_def])
-        .register(dispacher_def, handler)
+        .register(dispatcher_def, handler)
         .await;
 
     // create exchange
