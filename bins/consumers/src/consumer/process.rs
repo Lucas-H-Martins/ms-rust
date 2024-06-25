@@ -1,4 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::{self, Duration},
+};
 
 use async_trait::async_trait;
 use services::{
@@ -6,14 +10,18 @@ use services::{
     messages::ProcessDataTimer,
 };
 
-use tokio::time::sleep;
-use tracing::{error, info};
+use tokio::{sync::mpsc, time::sleep};
+use tracing::{debug, error, info};
 
-pub struct ConsumerMessage {}
+pub struct ConsumerMessage {
+    timers: Arc<Mutex<HashMap<i32, String>>>,
+}
 
 impl ConsumerMessage {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self {})
+        Arc::new(Self {
+            timers: Arc::new(Mutex::new(HashMap::new())),
+        })
     }
 }
 
@@ -30,8 +38,25 @@ impl ConsumerHandler for ConsumerMessage {
         };
         info!("Received data to process {}", data);
 
+        {
+            let mut timers = self.timers.lock().unwrap();
+
+            match timers.get(&data.id.clone()) {
+                Some(val) => {
+                    debug!("Exist value process to id = {}", &val);
+                    return Ok(());
+                }
+                None => {
+                    debug!("Add to hashmap process to id = {}", &data.id);
+                    timers.insert(data.id.clone(), data.message.clone());
+                }
+            };
+        }
+
+        let timers = Arc::clone(&self.timers);
+
         tokio::spawn(async move {
-            process_message(data).await;
+            process_message(data.clone()).await;
         });
         Ok(())
     }
