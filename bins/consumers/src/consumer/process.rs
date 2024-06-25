@@ -10,11 +10,14 @@ use services::{
     messages::ProcessDataTimer,
 };
 
-use tokio::{sync::mpsc, time::sleep};
+use tokio::{
+    sync::{mpsc, oneshot},
+    time::sleep,
+};
 use tracing::{debug, error, info};
 
 pub struct ConsumerMessage {
-    timers: Arc<Mutex<HashMap<i32, String>>>,
+    timers: Arc<Mutex<HashMap<i32, (String, oneshot::Sender<()>)>>>,
 }
 
 impl ConsumerMessage {
@@ -36,35 +39,51 @@ impl ConsumerHandler for ConsumerMessage {
                 return Err(AmqpError::ProcessMessage);
             }
         };
-        info!("Received data to process {}", data);
 
+        debug!("Received data to process {:?}", data);
+
+        // change to some method to verify if need to cancel rx channel or no based on message id
         {
             let mut timers = self.timers.lock().unwrap();
 
-            match timers.get(&data.id.clone()) {
-                Some(val) => {
-                    debug!("Exist value process to id = {}", &val);
-                    return Ok(());
-                }
-                None => {
-                    debug!("Add to hashmap process to id = {}", &data.id);
-                    timers.insert(data.id.clone(), data.message.clone());
-                }
-            };
+            if let Some((_, cancel_handle)) = timers.remove(&data.id) {
+                let _ = cancel_handle.send(());
+
+                debug!("Cancelled existing timer for id = {}", data.id);
+                return Ok(());
+            }
+
+            let (cancel_tx, cancel_rx) = oneshot::channel();
+
+            timers.insert(data.id, (data.message.clone(), cancel_tx));
+
+            let timers = Arc::clone(&self.timers);
+
+            tokio::spawn(async move {
+                process_message(data, timers, cancel_rx).await;
+            });
         }
 
-        let timers = Arc::clone(&self.timers);
-
-        tokio::spawn(async move {
-            process_message(data.clone()).await;
-        });
         Ok(())
     }
 }
-async fn process_message(data: ProcessDataTimer) {
-    info!("Init TTL Await");
-    // wait to execute ttl
-    sleep(Duration::from_secs(data.ttl as u64)).await;
+async fn process_message(
+    data: ProcessDataTimer,
+    timers: Arc<Mutex<HashMap<i32, (String, oneshot::Sender<()>)>>>,
+    mut cancel_rx: oneshot::Receiver<()>,
+) {
+    info!("Starting TTL await for id = {}", data.id);
 
-    info!("End TTL await");
+    tokio::select! {
+        _ = sleep(Duration::from_secs(data.ttl as u64)) => {
+            info!("TTL completed for id = {}", data.id);
+            let mut timers = timers.lock().unwrap();
+            if let Some((message, _)) = timers.remove(&data.id) {
+                info!("Processing completed for id = {}, message = {}", data.id, message);
+            }
+        }
+        _ = &mut cancel_rx => {
+            info!("TTL cancelled for id = {}", data.id);
+        }
+    }
 }
